@@ -46,16 +46,21 @@ def getImage():
         ret2,frame2 = cap2.read()
         frame = cv2.resize(frame,(640,480))
         frame2 = cv2.resize(frame2,(640,480))
+        hotmap = frame2[:,:,0]  #
+        
         cv2.imshow("frame",frame)
         cv2.imshow("frame2",frame2)
-        max_gray = frame2[120,600,0]  #max gray by max temperature
-        min_gray = frame2[347,600,0]  #min gray by min temperature
+        max_gray = hotmap[120,600]  #max gray by max temperature
+        min_gray = hotmap[347,600]  #min gray by min temperature
         # print(max_gray,min_gray)
         if max_T > 80 or max_T ==80:
             multiple = (max_gray - min_gray)/(max_T - min_T)
-            current_gray = (fire_T - min_T)*multiple+min_gray   #80度对应的灰度值
-            #阈值分割
+            current_gray = (fire_T - min_T)*multiple+min_gray   #80度对应的灰度值           
+            res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0)
             print(current_gray)
+
+            cv2.imshow("fire_image",hotmap)
+
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
         time.sleep(0.01)
