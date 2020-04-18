@@ -1,0 +1,3 @@
+float32 max_temperature
+float32 min_temperature
+int32 timer

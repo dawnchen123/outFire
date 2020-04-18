@@ -1,0 +1,22 @@
+import cv2 
+max_T = 35
+min_T = 22
+cap = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=1&subtype=0")  #RGB
+cap2 = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=2&subtype=0")  #hotmap
+ret,frame = cap.read()
+ret2,frame2 = cap2.read()
+while ret:
+    ret,frame = cap.read()
+    ret2,frame2 = cap2.read()
+    frame = cv2.resize(frame,(640,480))
+    frame2 = cv2.resize(frame2,(640,480))
+    cv2.imshow("frame",frame)
+    cv2.imshow("frame2",frame2)
+    max_gray = frame2[120,600,0]  #max gray by max temperature
+    min_gray = frame2[347,600,0]  #min gray by min temperature
+    print(max_gray,min_gray)
+
+    if cv2.waitKey(10) & 0xFF == ord('q'):
+        break
+cv2.destroyAllWindows()
+cap.release()

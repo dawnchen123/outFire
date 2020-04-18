@@ -1,0 +1,8 @@
+prefix=/home/hp-dawn/workspace/outfire/install
+
+Name: dahua_ptzcontrol
+Description: Description of dahua_ptzcontrol
+Version: 0.0.0
+Cflags: -I/home/hp-dawn/workspace/outfire/install/include
+Libs: -L/home/hp-dawn/workspace/outfire/install/lib -ldahua_ptzcontrol
+Requires: message_runtime
