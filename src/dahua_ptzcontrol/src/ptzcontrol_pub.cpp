@@ -415,21 +415,11 @@ int main(int argc, char *argv[])
 		// ros::Time::now().sec;
 		temperature_pub.publish(temperature);	
 		temperature.data.clear();
-
-		// if(PositionAngle.size()){
-		// 	PTZForSIT(PositionAngle.at(target_point),-0,0,true);//坐标移动
-		// 	if(ptz_timer%(interval_time+1)==interval_time){
-		// 		target_point++;
-		// 		if(target_point>(PositionAngle.size()-1)){
-		// 			PositionAngle.clear();
-		// 			target_point=0;
-					
-		// 		}
-		// 	}
-		// }
-		// else {
-		// 	PTZForSIT(0,-0,0,true);//坐标移动
-		// }
+		// PtzFastGo(-1000, -10, 0,false);
+		// PtzControl(DH_PTZ_LEFT_CONTROL,0,3000,0,false);
+		// PtzControl(DH_PTZ_RIGHT_CONTROL,0,3000,0,false);
+		// PtzControl(DH_PTZ_UP_CONTROL,0,3000,0,false);
+		// PtzControl(DH_PTZ_DOWN_CONTROL,0,3000,0,false);
 
 		ros::spinOnce();
 		loop_rate.sleep();

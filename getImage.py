@@ -6,8 +6,13 @@ import time
 from std_msgs.msg import Float32MultiArray
 
 rospy.init_node('ptzcontrol123', anonymous=True)
+
+pub_firePosition = rospy.Publisher('/fire/position', Float32MultiArray, queue_size=1)
+
 global max_T,min_T
 
+global firePosition
+firePosition = Float32MultiArray()
 
 
 def callback_position(msg):
@@ -58,6 +63,14 @@ def getImage():
             current_gray = (fire_T - min_T)*multiple+min_gray   #80度对应的灰度值           
             res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0)
             print(current_gray)
+            firePosition.data = [100,200]
+            # firePosition.data.append(100) 
+            # firePosition.data.append(200) 
+            pub_firePosition.publish(firePosition)
+            firePosition.data.pop
+
+
+            
 
             cv2.imshow("fire_image",hotmap)
 
