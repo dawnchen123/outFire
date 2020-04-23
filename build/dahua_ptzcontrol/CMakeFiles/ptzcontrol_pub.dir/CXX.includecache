@@ -93,8 +93,6 @@ dahua_ptzcontrol/HeatMapTemp.h
 /home/hp-dawn/workspace/outfire/src/dahua_ptzcontrol/src/dahua_ptzcontrol/HeatMapTemp.h
 dahua_ptzcontrol/Temperature.h
 /home/hp-dawn/workspace/outfire/src/dahua_ptzcontrol/src/dahua_ptzcontrol/Temperature.h
-iostream
--
 
 /opt/ros/kinetic/include/ros/advertise_options.h
 ros/forwards.h

@@ -128,146 +128,9 @@ void clientlogin(LLONG& m_lLoginHandle){
 	}
 }
 
-#define __max(a, b) (((a) > (b)) ? (a) : (b))
-void SearchMax(float &nMax, float *YData, int yDataLen)
-{
-	if (NULL == YData)
-	{
-		return;
-	}
-	nMax = (float)YData[0];
-	for (int i=1; i <yDataLen; i++)
-	{
-		nMax = __max(nMax, (float)YData[i]);
-	}
-}
-
-#define __min(a, b) (((a) < (b)) ? (a) : (b))
-void SearchMin(float &nMin, float *YData, int yDataLen)
-{
-	if (NULL == YData)
-	{
-		return;
-	}
-	nMin = (float)YData[0];
-	for (int i=1; i <yDataLen; i++)
-	{
-		nMin = __min(nMin, (float)YData[i]);
-	}
-}
-// 温度状态回调函数
-void CALLBACK cbRadiometryAttachCB(LLONG lAttachHandle, NET_RADIOMETRY_DATA* pBuf, int nBufLen, LDWORD dwUser)
-{	
-
-	int nPixel = pBuf->stMetaData.nWidth*pBuf->stMetaData.nHeight;
-
-	unsigned short *pImg = new unsigned short[nPixel];
-	if(NULL!=pImg){
-		memset(pImg,0,sizeof(unsigned short)*nPixel);
-	}
-	else{
-		return;
-	}
-
-	float *pTemp = new float[nPixel];
-	if(NULL!=pTemp){
-		memset(pTemp,0,sizeof(float)*nPixel);
-	}
-	else{
-		if (NULL != pImg)
-		{
-			delete [] pImg;
-			pImg = NULL;
-		}
-		return;
-	}
-
-	if(	CLIENT_RadiometryDataParse(pBuf,NULL,pTemp)){
-			// cout<<"解析数据成功"<<endl;
-	}
-
-	else{
-		//	cout<<"解析数据失败"<<endl;
-	}
-//	cout<<"the picture number is "<<nPixel<<endl;
-
-	SearchMax(nMax, pTemp, nPixel);
-	SearchMin(nMin, pTemp, nPixel);
-
-	// cout<<"温度is :"<<pTemp[200]<<endl;
-	cout<<"最小温度是："<<nMin<<endl;
-
-	cout<<"最大温度是："<<nMax<<endl;
-	delete[] pImg;
-	delete[] pTemp;
-}
-
-
-
-
-
-void GetTemp(LLONG m_lLoginHandle){
-
-	// 订阅热图
-	// NET_IN_RADIOMETRY_ATTACH stIn = {sizeof(stIn), 1, cbRadiometryAttachCB};
-	// NET_OUT_RADIOMETRY_ATTACH stOut = {sizeof(stOut)};
-	
-	int m_nHeatChannel=1;
-	NET_IN_RADIOMETRY_ATTACH stIn = {sizeof(stIn)};
-    stIn.nChannel = m_nHeatChannel;
-    stIn.dwUser = 0;
-    stIn.cbNotify = cbRadiometryAttachCB;
-    NET_OUT_RADIOMETRY_ATTACH stOut = {sizeof(stOut)};
-	LLONG attachHandle = CLIENT_RadiometryAttach(m_lLoginHandle, &stIn, &stOut, 1000);//订阅温度分布数据
-	
-	if (attachHandle==0)
-	{
-		cout<<"订阅失败"<<endl;
-	}
-	else {
-		cout<<"订阅成功"<<endl;
-	}
-	// // 通知设备开始采集数据
-	// // NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), 1};
-	// NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
-	NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), m_nHeatChannel};
-    NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
-	BOOL bRet=CLIENT_RadiometryFetch(m_lLoginHandle, &stInFetch, &stOutFetch, 1000);//获取温度分布数据
-
-	if (bRet)
-	{
-		cout<<"获取数据成功"<<endl;
-	}
-	else{
-		cout<<"获取数据失败"<<endl;
-	}
-
-	// char szJsonBuf[1024 * 40] = {0};
-    // int nerror = 0;
-    // int nChannel = -1;
-
-	// BOOL ret = CLIENT_GetNewDevConfig(m_lLoginHandle,CFG_CMD_THERMOMETRY,nChannel,szJsonBuf,1024*40,&nerror,3000);
-    // if (0 != ret)
-    // {
-    //     CFG_THERMOMETRY_INFO stuInfo = {0};
-    //     DWORD dwRetLen = 0;
-    //     ret = CLIENT_ParseData(CFG_CMD_THERMOMETRY,szJsonBuf,(char*)&stuInfo,sizeof(stuInfo),&dwRetLen);
-	// 	if(!ret){
-	// 		cout<<"getconfig error"<<endl;
-	// 	}
-	// 	else {
-	// 		// cout<<"温度"<<stuInfo.fReflectedTemperature<<endl;
-	// 		cout<<"距离"<<stuInfo.nObjectDistance<<endl;
-	// 	}
-	// }
-															 	
-	// 使用完毕,取消订阅热图
-	//   CLIENT_RadiometryDetach(attachHandle);
-}
 
 /**************云台控制*************/
-#include<iostream>
-using namespace std;
+
 //控制函数主题，所有函数都是调用的这个函数
 bool PtzControl(int nType, int nParam1, int nParam2, int nParam3, bool bStop /* = false */)
 {
@@ -280,11 +143,11 @@ bool PtzControl(int nType, int nParam1, int nParam2, int nParam3, bool bStop /* 
 	//m_lLoginID  ID
 	//m_nChannel  通道
 	//nType       控制命令
-	//nParam1     x移动
-	//nParam2     y移动
+	//nParam1     x移动(speed,0-8)
+	//nParam2     y移动(speed,0-8)
 	//nParam3	  镜头伸缩  //根据命令不同，nParam的含义也不同
 	//bStop    
-	return CLIENT_DHPTZControlEx(m_lLoginID, m_nChannel, nType, nParam1, nParam2, nParam3, bStop);
+	return CLIENT_DHPTZControlEx2(m_lLoginID, m_nChannel, nType, nParam1, nParam2, nParam3, bStop);
 }
 
 
@@ -347,48 +210,129 @@ void PTZForSIT( int nX, int nY, int nZoom,bool isabsolute)
 	// }
 }
 
-void Dialog::my_PTZForBasicControl(int nType, bool bStop)
+
+#define __max(a, b) (((a) > (b)) ? (a) : (b))
+void SearchMax(float &nMax, float *YData, int yDataLen)
 {
-    bool bRet = false;
-    bRet = PtzBasicControl(nType, m_nCtrlParam, bStop);
-    // if(bRet == false)
-    // {
-    //     // m_bMessageTip = TRUE;
-	// 	cout<<"Operate fail"<<endl;
-    // }
-	// else {
-	// 	cout<<"Operate success"<<endl;
-	// }
+	if (NULL == YData)
+	{
+		return;
+	}
+	nMax = (float)YData[0];
+	for (int i=1; i <yDataLen; i++)
+	{
+		nMax = __max(nMax, (float)YData[i]);
+	}
 }
 
-int position=0;
-int ptz_timer=0;
-int target_point=0;
-int all_point_num=0;
-int first_flag=1;//如果第一次进入则为1，否则为0
-// void PTZ_ControlCallback(const hit_nav::Angle::ConstPtr& msg){
+#define __min(a, b) (((a) < (b)) ? (a) : (b))
+void SearchMin(float &nMin, float *YData, int yDataLen)
+{
+	if (NULL == YData)
+	{
+		return;
+	}
+	nMin = (float)YData[0];
+	for (int i=1; i <yDataLen; i++)
+	{
+		nMin = __min(nMin, (float)YData[i]);
+	}
+}
 
-// 	// all_point_num=sizeof(msg->angle)/sizeof(float)/2;
-// 	all_point_num=msg->angle.size();
-// 	// cout<<"**********************************************总共有"<<all_point_num<<"个点*********************"<<endl;
+// 温度状态回调函数
+void CALLBACK cbRadiometryAttachCB(LLONG lAttachHandle, NET_RADIOMETRY_DATA* pBuf, int nBufLen, LDWORD dwUser)
+{	
+
+	int nPixel = pBuf->stMetaData.nWidth*pBuf->stMetaData.nHeight;
+
+	unsigned short *pImg = new unsigned short[nPixel];
+	if(NULL!=pImg){
+		memset(pImg,0,sizeof(unsigned short)*nPixel);
+	}
+	else{
+		return;
+	}
+
+	float *pTemp = new float[nPixel];
+	if(NULL!=pTemp){
+		memset(pTemp,0,sizeof(float)*nPixel);
+	}
+	else{
+		if (NULL != pImg)
+		{
+			delete [] pImg;
+			pImg = NULL;
+		}
+		return;
+	}
+
+	if(	CLIENT_RadiometryDataParse(pBuf,NULL,pTemp)){
+			// cout<<"解析数据成功"<<endl;
+	}
+
+	else{
+		//	cout<<"解析数据失败"<<endl;
+	}
+//	cout<<"the picture number is "<<nPixel<<endl;
+
+	SearchMax(nMax, pTemp, nPixel);
+	SearchMin(nMin, pTemp, nPixel);
+
+	// cout<<"温度is :"<<pTemp[200]<<endl;
+	// cout<<"最小温度是："<<nMin<<endl;
+
+	// cout<<"最大温度是："<<nMax<<endl;
+	delete[] pImg;
+	delete[] pTemp;
+}
+
+
+//火源坐标回调函数
+void firePosition_Callback(const std_msgs::Float32MultiArray msg){
+	std::cout<<"x: "<<msg.data[0]<<",y: "<<msg.data[1]<<std::endl;
+}
+
+
+
+void GetTemp(LLONG m_lLoginHandle){
+
+	// 订阅热图
+	// NET_IN_RADIOMETRY_ATTACH stIn = {sizeof(stIn), 1, cbRadiometryAttachCB};
+	// NET_OUT_RADIOMETRY_ATTACH stOut = {sizeof(stOut)};
 	
-// 	if(all_point_num==0){
-// 		first_flag=1;
-// 		PTZForSIT(0,0,0,true);//坐标移动
-// 		PositionAngle.clear();
-// 	}
-// 	// cout<<"**********************************************"<<first_flag<<"**********************************************"<<endl;
-// 	if(first_flag&&all_point_num!=0){
-// 		ptz_timer=0;
-// 		for(int i=0;i<all_point_num;i++){
-// 			int intpoint=int(msg->angle[i]*10)+position_basi;
-// 			PositionAngle.push_back(intpoint);
-// 		}
-// 		first_flag=0;
-// 	}
-// 		cout<<"**********************************************总共有"<<PositionAngle.size()<<"个点*********************"<<endl;
+	int m_nHeatChannel=1;
+	NET_IN_RADIOMETRY_ATTACH stIn = {sizeof(stIn)};
+    stIn.nChannel = m_nHeatChannel;
+    stIn.dwUser = 0;
+    stIn.cbNotify = cbRadiometryAttachCB;
+    NET_OUT_RADIOMETRY_ATTACH stOut = {sizeof(stOut)};
+	LLONG attachHandle = CLIENT_RadiometryAttach(m_lLoginHandle, &stIn, &stOut, 1000);//订阅温度分布数据
 	
-// }
+	if (attachHandle==0)
+	{
+		cout<<"订阅失败"<<endl;
+	}
+	else {
+		cout<<"订阅成功"<<endl;
+	}
+	// // 通知设备开始采集数据
+	// // NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), 1};
+	// NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
+	NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), m_nHeatChannel};
+    NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
+	BOOL bRet=CLIENT_RadiometryFetch(m_lLoginHandle, &stInFetch, &stOutFetch, 1000);//获取温度分布数据
+
+	if (bRet)
+	{
+		cout<<"获取数据成功"<<endl;
+	}
+	else{
+		cout<<"获取数据失败"<<endl;
+	}
+}
+
+
+
 int main(int argc, char *argv[])
 {
 
@@ -400,11 +344,11 @@ int main(int argc, char *argv[])
 	// ros::MultiThreadedSpinner s(2);
 	ros::Publisher temperature_pub = nh.advertise<std_msgs::Float32MultiArray>("temperature_data",20);//发布温度数据
 
-	// ros::Subscriber sub = nh.subscribe("rotation_angle", 100, PTZ_ControlCallback);
+	ros::Subscriber sub = nh.subscribe("/fire/position", 30, firePosition_Callback);
  	InitClient();
 	clientlogin(m_lLoginHandle);
 	
-	ros::Rate loop_rate(20);
+	ros::Rate loop_rate(30);
 	
 	while(ros::ok()){
 	// PositionAngle=int(msg->angle[i]*10)+position_basi;	
@@ -415,15 +359,13 @@ int main(int argc, char *argv[])
 		// ros::Time::now().sec;
 		temperature_pub.publish(temperature);	
 		temperature.data.clear();
-		// PtzFastGo(-1000, -10, 0,false);
-		// PtzControl(DH_PTZ_LEFT_CONTROL,0,3000,0,false);
-		// PtzControl(DH_PTZ_RIGHT_CONTROL,0,3000,0,false);
-		// PtzControl(DH_PTZ_UP_CONTROL,0,3000,0,false);
-		// PtzControl(DH_PTZ_DOWN_CONTROL,0,3000,0,false);
+		// PtzControl(DH_PTZ_LEFT_CONTROL,0,8,0,false);
+		// PtzControl(DH_PTZ_RIGHT_CONTROL,0,9,0,false);
+		// PtzControl(DH_PTZ_UP_CONTROL,0,8,0,false);
+		// PtzControl(DH_PTZ_DOWN_CONTROL,0,8,0,false);
 
 		ros::spinOnce();
-		loop_rate.sleep();
-		ptz_timer++;
+		// loop_rate.sleep();
 	}
 	return 0;
 }
