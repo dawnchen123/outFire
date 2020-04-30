@@ -31,6 +31,9 @@ int m_nChannel,m_nCtrlParam;
 int position_basi=-40;
 float nMax =-1;
 float nMin =-1;
+
+int control_x = 0;
+int control_y = 0;
 // vector<int> PositionAngle;
 void CALLBACK DisConnectFunc(LLONG lLoginID, char *pchDVRIP, LONG nDVRPort, LDWORD dwUser)
 {
@@ -290,6 +293,9 @@ void CALLBACK cbRadiometryAttachCB(LLONG lAttachHandle, NET_RADIOMETRY_DATA* pBu
 //火源坐标回调函数
 void firePosition_Callback(const std_msgs::Float32MultiArray msg){
 	std::cout<<"x: "<<msg.data[0]<<",y: "<<msg.data[1]<<std::endl;
+	control_x = msg.data[0];
+	control_y = msg.data[1];
+
 }
 
 
@@ -311,6 +317,8 @@ void GetTemp(LLONG m_lLoginHandle){
 	if (attachHandle==0)
 	{
 		cout<<"订阅失败"<<endl;
+		PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
+
 	}
 	else {
 		cout<<"订阅成功"<<endl;
@@ -328,6 +336,8 @@ void GetTemp(LLONG m_lLoginHandle){
 	}
 	else{
 		cout<<"获取数据失败"<<endl;
+		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
+
 	}
 }
 
@@ -359,13 +369,35 @@ int main(int argc, char *argv[])
 		// ros::Time::now().sec;
 		temperature_pub.publish(temperature);	
 		temperature.data.clear();
-		// PtzControl(DH_PTZ_LEFT_CONTROL,0,8,0,false);
-		// PtzControl(DH_PTZ_RIGHT_CONTROL,0,9,0,false);
-		// PtzControl(DH_PTZ_UP_CONTROL,0,8,0,false);
-		// PtzControl(DH_PTZ_DOWN_CONTROL,0,8,0,false);
+		if (control_x<-20 && control_y<-20) {
+			PtzControl(DH_EXTPTZ_LEFTTOP,1,int(control_x/100),0,false); //左上
+			std::cout<<"LEFTTOP"<<std::endl;
+		} 
+		else if (control_x<-20 && control_y>20) {
+			PtzControl(DH_EXTPTZ_LEFTDOWN,1,int(control_x/100),0,false);	//左下
+			std::cout<<"LEFTDOWN"<<std::endl;
+		}
+		else if (control_x>20 && control_y<-20) {
+			PtzControl(DH_EXTPTZ_RIGHTTOP,1,int(control_x/100),0,false);	//右上
+			std::cout<<"RIGHTTOP"<<std::endl;
+		}
+		else if (control_x>20 && control_y>20) {
+			PtzControl(DH_EXTPTZ_RIGHTDOWN,1,int(control_x/100),0,false); //右下
+			std::cout<<"RIGHTDOWN"<<std::endl;
+		} else {
+			PtzControl(DH_EXTPTZ_DELETEMODE,0,0,0,true); //停止
+		}
+
+		control_x = 0;
+		control_y = 0;
+		std::cout<<"cx: "<<control_x<<", cy: "<<control_y<<std::endl;
+		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
+
+
+
 
 		ros::spinOnce();
-		// loop_rate.sleep();
+		loop_rate.sleep();
 	}
 	return 0;
 }

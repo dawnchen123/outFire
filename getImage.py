@@ -66,9 +66,9 @@ def getImage():
         frame2=cv2.rectangle(frame2,(592,116),(610,350),(0,0,0),-1) #这里将温度指示框删除
         hotmap = frame2[:,:,0]  #获取热图
         # print(max_gray,min_gray)
-        if max_T > 80 or max_T ==80:
+        if max_T > 80 or max_T == 80:
             multiple = (max_gray - min_gray)/(max_T - min_T)
-            current_gray = (fire_T - min_T)*multiple+min_gray   #80度对应的灰度值           
+            current_gray = (fire_T - min_T)*multiple+min_gray   #100度对应的灰度值           
             res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0)
             print(current_gray)
 
@@ -81,8 +81,10 @@ def getImage():
                     cx = int(M['m10']/M['m00'])
                     cy = int(M['m01']/M['m00'])
                     print(str(cx)+','+str(cy))
-
-            firePosition.data = [cx,cy] #将火源坐标用ROS 话题发布
+            if cx > 0 and cy > 0:
+                firePosition.data = [cx-320,cy-240] #将火源坐标用ROS 话题发布
+            else:
+                firePosition.data = [0,0]
             pub_firePosition.publish(firePosition)
 
             cv2.imshow("fire_image",hotmap)
