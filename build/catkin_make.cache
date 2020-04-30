@@ -1,2 +1,0 @@
-dahua_ptzcontrol
--DCATKIN_DEVEL_PREFIX=/home/hp-dawn/workspace/outfire/devel -DCMAKE_INSTALL_PREFIX=/home/hp-dawn/workspace/outfire/install -G Unix Makefiles
