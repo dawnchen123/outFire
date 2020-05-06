@@ -34,6 +34,8 @@ float nMin =-1;
 
 int control_x = 0;
 int control_y = 0;
+
+int cnnResult = 0;
 // vector<int> PositionAngle;
 void CALLBACK DisConnectFunc(LLONG lLoginID, char *pchDVRIP, LONG nDVRPort, LDWORD dwUser)
 {
@@ -298,6 +300,13 @@ void firePosition_Callback(const std_msgs::Float32MultiArray msg){
 
 }
 
+//火源坐标回调函数
+void cnnDetect_Callback(const std_msgs::Float32MultiArray msg){
+	std::cout<<"cnn_result: "<<msg.data[0]<<std::endl;
+	cnnResult = msg.data[0];
+
+}
+
 
 
 void GetTemp(LLONG m_lLoginHandle){
@@ -337,7 +346,6 @@ void GetTemp(LLONG m_lLoginHandle){
 	else{
 		cout<<"获取数据失败"<<endl;
 		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
-
 	}
 }
 
@@ -354,7 +362,11 @@ int main(int argc, char *argv[])
 	// ros::MultiThreadedSpinner s(2);
 	ros::Publisher temperature_pub = nh.advertise<std_msgs::Float32MultiArray>("temperature_data",20);//发布温度数据
 
-	ros::Subscriber sub = nh.subscribe("/fire/position", 30, firePosition_Callback);
+	//订阅热红外检测话题
+	ros::Subscriber sub_hotmap = nh.subscribe("/fire/position", 30, firePosition_Callback);
+	//订阅CNN检测话题
+	ros::Subscriber sub_cnn = nh.subscribe("/fire/result", 30, cnnDetect_Callback);
+	
  	InitClient();
 	clientlogin(m_lLoginHandle);
 	
@@ -369,28 +381,28 @@ int main(int argc, char *argv[])
 		// ros::Time::now().sec;
 		temperature_pub.publish(temperature);	
 		temperature.data.clear();
-		if (control_x<-20 && control_y<-20) {
-			PtzControl(DH_EXTPTZ_LEFTTOP,1,int(control_x/100),0,false); //左上
-			std::cout<<"LEFTTOP"<<std::endl;
-		} 
-		else if (control_x<-20 && control_y>20) {
-			PtzControl(DH_EXTPTZ_LEFTDOWN,1,int(control_x/100),0,false);	//左下
-			std::cout<<"LEFTDOWN"<<std::endl;
-		}
-		else if (control_x>20 && control_y<-20) {
-			PtzControl(DH_EXTPTZ_RIGHTTOP,1,int(control_x/100),0,false);	//右上
-			std::cout<<"RIGHTTOP"<<std::endl;
-		}
-		else if (control_x>20 && control_y>20) {
-			PtzControl(DH_EXTPTZ_RIGHTDOWN,1,int(control_x/100),0,false); //右下
-			std::cout<<"RIGHTDOWN"<<std::endl;
-		} else {
-			PtzControl(DH_EXTPTZ_DELETEMODE,0,0,0,true); //停止
-		}
+		// if (control_x<-50 && control_y<-50) {
+		// 	PtzControl(DH_EXTPTZ_LEFTTOP,1,1,0,false); //左上
+		// 	std::cout<<"LEFTTOP"<<std::endl;
+		// } 
+		// else if (control_x<-50 && control_y>50) {
+		// 	PtzControl(DH_EXTPTZ_LEFTDOWN,1,1,0,false);	//左下
+		// 	std::cout<<"LEFTDOWN"<<std::endl;
+		// }
+		// else if (control_x>50 && control_y<-50) {
+		// 	PtzControl(DH_EXTPTZ_RIGHTTOP,1,1,0,false);	//右上
+		// 	std::cout<<"RIGHTTOP"<<std::endl;
+		// }
+		// else if (control_x>50 && control_y>50) {
+		// 	PtzControl(DH_EXTPTZ_RIGHTDOWN,1,1,0,false); //右下
+		// 	std::cout<<"RIGHTDOWN"<<std::endl;
+		// } else {
+		// 	PtzControl(DH_EXTPTZ_DELETEMODE,0,0,0,true); //停止
+		// }
 
-		control_x = 0;
-		control_y = 0;
-		std::cout<<"cx: "<<control_x<<", cy: "<<control_y<<std::endl;
+		// control_x = 0;
+		// control_y = 0;
+		// std::cout<<"cx: "<<control_x<<", cy: "<<control_y<<std::endl;
 		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
 
 
