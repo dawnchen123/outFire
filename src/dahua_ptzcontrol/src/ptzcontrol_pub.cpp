@@ -319,34 +319,52 @@ void GetTemp(LLONG m_lLoginHandle){
 	NET_IN_RADIOMETRY_ATTACH stIn = {sizeof(stIn)};
     stIn.nChannel = m_nHeatChannel;
     stIn.dwUser = 0;
-    stIn.cbNotify = cbRadiometryAttachCB;
+    stIn.cbNotify = cbRadiometryAttachCB;   //tagNET_RADIOMETRY_CURRENTHOTCOLDSPOT_INFO
     NET_OUT_RADIOMETRY_ATTACH stOut = {sizeof(stOut)};
-	LLONG attachHandle = CLIENT_RadiometryAttach(m_lLoginHandle, &stIn, &stOut, 1000);//订阅温度分布数据
+	LLONG attachHandle = CLIENT_RadiometryAttach(m_lLoginHandle, &stIn, &stOut, 20);//订阅温度分布数据
 	
-	if (attachHandle==0)
-	{
-		cout<<"订阅失败"<<endl;
-		PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
+	// if (attachHandle==0)
+	// {
+	// 	cout<<"订阅失败"<<endl;
+	// 	PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
 
-	}
-	else {
-		cout<<"订阅成功"<<endl;
-	}
-	// // 通知设备开始采集数据
+	// }
+	// else {
+	// 	cout<<"订阅成功"<<endl;
+	// }
+	// // // 通知设备开始采集数据
 	// // NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), 1};
 	// NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
 	NET_IN_RADIOMETRY_FETCH stInFetch = {sizeof(stInFetch), m_nHeatChannel};
     NET_OUT_RADIOMETRY_FETCH stOutFetch = {sizeof(stOutFetch)};
-	BOOL bRet=CLIENT_RadiometryFetch(m_lLoginHandle, &stInFetch, &stOutFetch, 1000);//获取温度分布数据
+	BOOL bRet=CLIENT_RadiometryFetch(m_lLoginHandle, &stInFetch, &stOutFetch, 20);//获取温度分布数据
 
-	if (bRet)
-	{
-		cout<<"获取数据成功"<<endl;
-	}
-	else{
-		cout<<"获取数据失败"<<endl;
-		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
-	}
+
+	// short thx=0,thy=0;
+	// short tcx=0,tcy=0;
+	// int nTemperatrueUnit=0;
+	// BYTE tmpByte[256];
+	// NET_RADIOMETRY_CURRENTHOTCOLDSPOT_INFO stuHotColdSpotInfo = {sizeof(stuHotColdSpotInfo)};
+	// stuHotColdSpotInfo.stuHotPoint={thx,thy};
+	// stuHotColdSpotInfo.stuColdPoint={tcx,tcy};
+	// stuHotColdSpotInfo.fHotSpotValue = 0;
+	// stuHotColdSpotInfo.fColdSpotValue = 0;
+	// stuHotColdSpotInfo.nTemperatrueUnit = 0;
+	// memset(stuHotColdSpotInfo.byReserved,0,256);
+	// NET_IN_RADIOMETRY_CURRENTHOTCOLDSPOT_INFO stInFetch = {sizeof(stInFetch), 1};
+    // NET_OUT_RADIOMETRY_CURRENTHOTCOLDSPOT_INFO stOutFetch;
+	// stOutFetch.dwSize = sizeof(stOutFetch);
+	// stOutFetch.stuCurrentHotColdSpotInfo = stuHotColdSpotInfo;
+	// BOOL bRet=CLIENT_RadiometryGetCurrentHotColdSpotInfo(m_lLoginHandle, &stInFetch, &stOutFetch, 1000);//获取温度分布数据
+
+	// if (bRet)
+	// {
+	// 	cout<<"获取数据成功"<<endl;
+	// }
+	// else{
+	// 	cout<<"获取数据失败"<<endl;
+	// 	// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
+	// }
 }
 
 

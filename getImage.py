@@ -67,6 +67,7 @@ def stop_move(ptz, request,timeout=1):
 
 def callback_position(msg):
     global max_T,min_T
+    print("receive mgs:" + str(msg.data))
     min_T = msg.data[0]
     max_T = msg.data[1]
 
@@ -101,8 +102,8 @@ if request.Velocity is None:
 def ptzControl():
     global detect_fire
     while not detect_fire:
-        move_right(ptz, request, 1,4)
-        move_left(ptz, request, -1,4)
+        move_right(ptz, request, 0.2,14)
+        move_left(ptz, request, -0.2,14)
         time.sleep(0.1)
     stop_move(ptz, request)    #停止移动云台
 
@@ -160,6 +161,8 @@ def getImage():
                     print(str(cx)+','+str(cy))
             if cx > 0 and cy > 0:
                 detect_fire = bool(1)
+                move_left(ptz, request,0,1)
+
                 firePosition.data = [cx-320,cy-240] #将火源坐标用ROS 话题发布
             else:
                 firePosition.data = [0,0]
@@ -182,8 +185,8 @@ class myThread (threading.Thread):
         self.threadID = threadID
         self.name = name
     def run(self):
-        self.func()
         print ("开启线程： " + self.name)
+        self.func()
         # 获取锁，用于线程同步
         threadLock.acquire()
         # 释放锁，开启下一个线程
