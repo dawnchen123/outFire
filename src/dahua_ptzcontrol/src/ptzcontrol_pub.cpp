@@ -381,9 +381,9 @@ int main(int argc, char *argv[])
 	ros::Publisher temperature_pub = nh.advertise<std_msgs::Float32MultiArray>("temperature_data",20);//发布温度数据
 
 	//订阅热红外检测话题
-	ros::Subscriber sub_hotmap = nh.subscribe("/fire/position", 30, firePosition_Callback);
+	// ros::Subscriber sub_hotmap = nh.subscribe("/fire/position", 30, firePosition_Callback);
 	//订阅CNN检测话题
-	ros::Subscriber sub_cnn = nh.subscribe("/fire/result", 30, cnnDetect_Callback);
+	// ros::Subscriber sub_cnn = nh.subscribe("/fire/result", 30, cnnDetect_Callback);
 	
  	InitClient();
 	clientlogin(m_lLoginHandle);

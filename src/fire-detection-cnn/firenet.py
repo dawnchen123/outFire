@@ -15,6 +15,11 @@ import os
 import math
 import rospy
 import threading
+import time
+import datetime
+from time import sleep
+from onvif import ONVIFCamera
+import zeep
 
 from std_msgs.msg import Float32MultiArray
 
@@ -33,7 +38,69 @@ global cnnResult
 cnnResult = Float32MultiArray()
 
 
+pub_firePosition = rospy.Publisher('/fire/position', Float32MultiArray, queue_size=1)   #定义火源坐标发布话题
 
+global max_T,min_T
+global firePosition
+global detect_fire
+global cnn_fire
+global cnnCount
+detect_fire = bool(0)
+cnn_fire = bool(0)
+firePosition = Float32MultiArray() #火源坐标初始化
+cnnCount=0
+
+
+
+def zeep_pythonvalue(self, xmlvalue):
+    return xmlvalue
+ 
+def perform_move(ptz, request, timeout):
+    # Start continuous move
+    ptz.ContinuousMove(request)
+    print(datetime.datetime.now())
+    # Wait a certain time
+    sleep(timeout)
+    print(datetime.datetime.now())
+    # Stop continuous move
+    ptz.Stop({'ProfileToken': request.ProfileToken})
+ 
+ 
+def move_up(ptz, request,speed, timeout=1):
+    print('move up...') 
+    request.Velocity.PanTilt.x = 0
+    request.Velocity.PanTilt.y = speed
+    perform_move(ptz, request, timeout)
+ 
+def move_down(ptz, request,speed, timeout=1):
+    print('move down...') 
+    request.Velocity.PanTilt.x = 0
+    request.Velocity.PanTilt.y = speed
+    perform_move(ptz, request, timeout)
+ 
+def move_right(ptz, request,speed, timeout=1):
+    print('move right...') 
+    request.Velocity.PanTilt.x = speed
+    request.Velocity.PanTilt.y = 0
+    perform_move(ptz, request, timeout)
+ 
+def move_left(ptz, request,speed, timeout=1):
+    print('move left...') 
+    request.Velocity.PanTilt.x = speed
+    request.Velocity.PanTilt.y = 0
+    perform_move(ptz, request, timeout)
+
+def stop_move(ptz, request,timeout=1):
+    print('stop move!') 
+    request.Velocity.PanTilt.x = 0
+    request.Velocity.PanTilt.y = 0
+    perform_move(ptz, request, timeout)
+
+def callback_position(msg):
+    global max_T,min_T
+    print("receive mgs:" + str(msg.data))
+    min_T = msg.data[0]
+    max_T = msg.data[1]
 
 
 def construct_firenet (x,y, training=False):
@@ -81,107 +148,207 @@ def construct_firenet (x,y, training=False):
 
     return model
 
-################################################################################
 
-if __name__ == '__main__':
+# construct and display model
 
-################################################################################
+model = construct_firenet (224, 224, training=False)
+print("Constructed FireNet ...")
 
-    # construct and display model
-
-    model = construct_firenet (224, 224, training=False)
-    print("Constructed FireNet ...")
-
-    model.load(os.path.join("models/FireNet", "firenet"),weights_only=True)
-    print("Loaded CNN network weights ...")
+model.load(os.path.join("models/FireNet", "firenet"),weights_only=True)
+print("Loaded CNN network weights ...")
 
 ################################################################################
 
+
+#云台控制初始化
+# def continuous_move():
+mycam = ONVIFCamera('192.168.1.108', 80, 'admin', 'admin123')
+# Create media service object
+media = mycam.create_media_service()
+# Create ptz service object
+ptz = mycam.create_ptz_service()
+
+# Get target profile
+zeep.xsd.simple.AnySimpleType.pythonvalue = zeep_pythonvalue
+media_profile = media.GetProfiles()[0]
+
+# Get PTZ configuration options for getting continuous move range
+request = ptz.create_type('GetConfigurationOptions')
+request.ConfigurationToken = media_profile.PTZConfiguration.token
+ptz_configuration_options = ptz.GetConfigurationOptions(request)
+
+request = ptz.create_type('ContinuousMove')
+request.ProfileToken = media_profile.token
+ptz.Stop({'ProfileToken': media_profile.token})
+
+if request.Velocity is None:
+    request.Velocity = ptz.GetStatus({'ProfileToken': media_profile.token}).Position
+    request.Velocity = ptz.GetStatus({'ProfileToken': media_profile.token}).Position
+    request.Velocity.PanTilt.space = ptz_configuration_options.Spaces.ContinuousPanTiltVelocitySpace[0].URI
+    request.Velocity.Zoom.space = ptz_configuration_options.Spaces.ContinuousZoomVelocitySpace[0].URI
+
+
+
+def ptzControl():
+    global detect_fire
+    while not (detect_fire or cnn_fire):
+        move_right(ptz, request, 0.2,14)
+        move_left(ptz, request, -0.2,14)
+        time.sleep(0.1)
+    stop_move(ptz, request)    #停止移动云台
+
+
+
+
+      
+def listener():
+ 
+    temperature_topic = "temperature_data"
+    
+    rospy.Subscriber(temperature_topic, Float32MultiArray, callback_position)
+    time.sleep(0.1)
+
+    # spin() simply keeps python from exiting until this node is stopped
+    rospy.spin()
+
+
+def getImage():
+
+    global max_T,min_T,detect_fire
+
+    cx = 0
+    cy = 0
+    fire_T = 10         #定义与火源最高温度的差值
+    cap = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=2&subtype=1")  #hotmap
+    video = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=1&subtype=1")
+    
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    ret,frame = cap.read()
+
+    ret2, frame2 = video.read()
+
+    while ret:
+        
+        # print(max_T,min_T)
+        ret,frame = cap.read()
+        ret2, frame2 = video.read()
+
+        frame = cv2.resize(frame,(640,480))
+
+        firenetDetect(frame2,width,height)
+        max_gray = frame[120,600,0]  #max gray by max temperature
+        min_gray = frame[347,600,0]  #min gray by min temperature
+        frame=cv2.rectangle(frame,(592,116),(610,350),(0,0,0),-1) #这里将温度指示框删除
+        hotmap = frame[:,:,0]  #获取热图
+        # print(max_gray,min_gray)
+        if max_T > 100:
+            multiple = (max_gray - min_gray)/(max_T - min_T)
+            current_gray = (max_T-fire_T - min_T)*multiple+min_gray   #100度对应的灰度值           
+            # current_gray = max_gray-10   #100度对应的灰度值           
+
+            res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0)
+            print(current_gray)
+
+            contours,hierarchy = cv2.findContours(hotmap,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+            # cv2.drawContours(hotmap,contours,(0,255,0),3)
+            for i in range(len(contours)):
+                if cv2.contourArea(contours[i])> 200:
+                    cnt = contours[i]
+                    M = cv2.moments(cnt)
+                    cx = int(M['m10']/M['m00'])
+                    cy = int(M['m01']/M['m00'])
+                    print(str(cx)+','+str(cy))
+            if cx > 0 and cy > 0:
+                detect_fire = bool(1)
+                move_left(ptz, request,0,1)
+
+                firePosition.data = [cx-320,cy-240] #将火源坐标用ROS 话题发布
+            else:
+                firePosition.data = [0,0]
+            # pub_firePosition.publish(firePosition)
+
+            cv2.imshow("fire_image",hotmap)
+        cv2.imshow("frame",frame)
+        # cv2.imshow("frame2",frame2)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+    cap.release()
+
+
+################################################################################
+
+def firenetDetect(frame,width,height):
+################################################################################
+    global cnn_fire
+    global cnnCount
     # network input sizes
-
     rows = 224
     cols = 224
-
-    # display and loop settings
-
-    windowName = "Live Fire Detection - FireNet CNN";
-    keepProcessing = True;
-
 ################################################################################
-    # if len(sys.argv) == 2:
-    if 1:
 
-        # load video file from first command line argument
+    # re-size image to network input size and perform prediction
 
-        # video = cv2.VideoCapture(sys.argv[1])
-        video = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=1&subtype=0")
+    small_frame = cv2.resize(frame, (rows, cols), cv2.INTER_AREA)
+    output = model.predict([small_frame])
 
-        print("Loaded video ...")
-
-        # create window
-
-        cv2.namedWindow(windowName, cv2.WINDOW_NORMAL);
-
-        # get video properties
-
-        width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH));
-        height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        # fps = video.get(cv2.CAP_PROP_FPS)
-        # frame_time = round(1000/fps);
-
-        while (keepProcessing):
-
-            # start a timer (to see how long processing and display takes)
-
-            start_t = cv2.getTickCount();
-
-            # get video frame from file, handle end of file
-
-            ret, frame = video.read()
-            if not ret:
-                print("... end of video file reached");
-                break;
-
-            # re-size image to network input size and perform prediction
-
-            small_frame = cv2.resize(frame, (rows, cols), cv2.INTER_AREA)
-            output = model.predict([small_frame])
-
-            # label image based on prediction
-
-            if round(output[0][0]) == 1:
-                cv2.rectangle(frame, (0,0), (width,height), (0,0,255), 50)
-                cv2.putText(frame,'FIRE',(int(width/16),int(height/4)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 4,(255,255,255),10,cv2.LINE_AA);
-                cnnResult.data = [1]
-            else:
-                cv2.rectangle(frame, (0,0), (width,height), (0,255,0), 50)
-                cv2.putText(frame,'CLEAR',(int(width/16),int(height/4)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 4,(255,255,255),10,cv2.LINE_AA);
-                cnnResult.data = [0]
-            
-            pub_cnnResult.publish(cnnResult)
-
-            ###
-
-            # stop the timer and convert to ms. (to see how long processing and display takes)
-
-            # stop_t = ((cv2.getTickCount() - start_t)/cv2.getTickFrequency()) * 1000;
-
-            # image display and key handling
-
-            cv2.imshow(windowName, frame);
-
-            # wait fps time or less depending on processing time taken (e.g. 1000ms / 25 fps = 40 ms)
-         
-            key = cv2.waitKey(10) & 0xFF;
-
-            # key = cv2.waitKey(max(2, frame_time - int(math.ceil(stop_t)))) & 0xFF;
-            if (key == ord('x')):
-                keepProcessing = False;
-            elif (key == ord('f')):
-                cv2.setWindowProperty(windowName, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN);
+    # label image based on prediction
+    if round(output[0][0]) == 1:
+        cnnCount=cnnCount+1
+        cv2.rectangle(frame, (0,0), (width,height), (0,0,255), 50)
+        cv2.putText(frame,'FIRE',(int(width/16),int(height/4)),
+            cv2.FONT_HERSHEY_SIMPLEX, 4,(255,255,255),10,cv2.LINE_AA);
+        if cnnCount>5:
+            cnn_fire = bool(1)
+            cnnCount = 0
     else:
-        print("usage: python firenet.py videofile.ext");
+        cv2.rectangle(frame, (0,0), (width,height), (0,255,0), 50)
+        cv2.putText(frame,'CLEAR',(int(width/16),int(height/4)),
+            cv2.FONT_HERSHEY_SIMPLEX, 4,(255,255,255),10,cv2.LINE_AA);
+    # pub_cnnResult.publish(cnnResult)
+    # image display and key handling
 
+    cv2.imshow("cnnResult", frame);     
+    # key = cv2.waitKey(max(2, frame_time - int(math.ceil(stop_t)))) & 0xFF;
 ################################################################################
+
+#多线程执行云台控制/温度获取/热红外图像采集
+class myThread (threading.Thread):
+    def __init__(self,func, threadID, name):
+        threading.Thread.__init__(self)
+        self.func = func
+        self.threadID = threadID
+        self.name = name
+    def run(self):
+        print ("开启线程： " + self.name)
+        self.func()
+        # 获取锁，用于线程同步
+        threadLock.acquire()
+        # 释放锁，开启下一个线程
+        threadLock.release()
+
+if __name__ == '__main__':
+    threadLock = threading.Lock()
+    threads = []
+    thread1 = myThread(ptzControl,1,"Thread-1: ptzControl")
+    thread2 = myThread(listener,2,"Thread-2: listener")
+    thread3 = myThread(getImage,3,"Thread-3: getImage")
+
+    
+    # 开启新线程
+    thread1.start()
+    thread2.start()
+    thread3.start()
+
+    threads.append(thread1)
+    threads.append(thread2)
+    threads.append(thread3)
+
+
+    # # 等待所有线程完成
+    for t in threads:
+        t.join()
+    print ("退出主线程")
