@@ -16,7 +16,7 @@ import math
 import rospy
 import threading
 import time
-import datetime
+from datetime import datetime
 from time import sleep
 from onvif import ONVIFCamera
 import zeep
@@ -42,13 +42,15 @@ pub_firePosition = rospy.Publisher('/fire/position', Float32MultiArray, queue_si
 
 global max_T,min_T
 global firePosition
-global detect_fire
-global cnn_fire
-global cnnCount
+global detect_fire,cnn_fire,cnnCount
+global start_t,stop_t
+
 detect_fire = bool(0)
 cnn_fire = bool(0)
 firePosition = Float32MultiArray() #火源坐标初始化
 cnnCount=0
+start_t = datetime.utcnow()
+stop_t = datetime.utcnow()
 
 
 
@@ -58,13 +60,16 @@ def zeep_pythonvalue(self, xmlvalue):
 def perform_move(ptz, request, timeout):
     # Start continuous move
     ptz.ContinuousMove(request)
-    print(datetime.datetime.now())
     # Wait a certain time
     sleep(timeout)
-    print(datetime.datetime.now())
     # Stop continuous move
     ptz.Stop({'ProfileToken': request.ProfileToken})
  
+def move(ptz, request,speed_horizen,speed_vertical,timeout=1):
+    request.Velocity.PanTilt.x = speed_horizen
+    request.Velocity.PanTilt.y = speed_vertical
+    perform_move(ptz, request, timeout)
+
  
 def move_up(ptz, request,speed, timeout=1):
     print('move up...') 
@@ -90,7 +95,7 @@ def move_left(ptz, request,speed, timeout=1):
     request.Velocity.PanTilt.y = 0
     perform_move(ptz, request, timeout)
 
-def stop_move(ptz, request,timeout=1):
+def stop_move(ptz, request,timeout=0.05):
     print('stop move!') 
     request.Velocity.PanTilt.x = 0
     request.Velocity.PanTilt.y = 0
@@ -98,7 +103,7 @@ def stop_move(ptz, request,timeout=1):
 
 def callback_position(msg):
     global max_T,min_T
-    print("receive mgs:" + str(msg.data))
+    # print("receive mgs:" + str(msg.data))
     min_T = msg.data[0]
     max_T = msg.data[1]
 
@@ -190,14 +195,32 @@ if request.Velocity is None:
 
 
 def ptzControl():
-    global detect_fire
-    while not (detect_fire or cnn_fire):
-        move_right(ptz, request, 0.2,14)
-        move_left(ptz, request, -0.2,14)
+    global detect_fire,cnn_fire
+    while True:
+        if not (detect_fire or cnn_fire):
+            move_right(ptz, request, 0.2,14)
+            move_left(ptz, request, -0.2,14)
+        elif detect_fire and cnn_fire:
+            if firePosition.data[0] != 0:
+                if (firePosition.data[0]<-50 and firePosition.data[1]<-50): #左上
+                    move(ptz, request, -0.2,0.2,0.1) 
+                    print("LEFTTOP")
+                elif (firePosition.data[0]<-50 and firePosition.data[1]>50): #左下
+                    move(ptz, request, -0.2,-0.2,0.1) 
+                    print("LEFTDOWN")
+                elif (firePosition.data[0]>50 and firePosition.data[1]<-50): #右上
+                    move(ptz, request, 0.2,0.2,0.1) 
+                    print("RIGHTTOP")
+                elif (firePosition.data[0]>50 and firePosition.data[1]>50): #右下
+                    move(ptz, request, 0.2,-0.2,0.1) 
+                    print("RIGHTDOWN")
+                else:
+                    print("stop")
+                    stop_move(ptz, request)    #停止移动云台
+        else:
+            stop_move(ptz, request)    #停止移动云台
         time.sleep(0.1)
-    stop_move(ptz, request)    #停止移动云台
-
-
+    # stop_move(ptz, request)    #停止移动云台
 
 
       
@@ -214,7 +237,7 @@ def listener():
 
 def getImage():
 
-    global max_T,min_T,detect_fire
+    global max_T,min_T,detect_fire,cnn_fire
 
     cx = 0
     cy = 0
@@ -236,8 +259,8 @@ def getImage():
         ret2, frame2 = video.read()
 
         frame = cv2.resize(frame,(640,480))
-
-        firenetDetect(frame2,width,height)
+        if not cnn_fire:
+            firenetDetect(frame2,width,height)
         max_gray = frame[120,600,0]  #max gray by max temperature
         min_gray = frame[347,600,0]  #min gray by min temperature
         frame=cv2.rectangle(frame,(592,116),(610,350),(0,0,0),-1) #这里将温度指示框删除
@@ -248,7 +271,7 @@ def getImage():
             current_gray = (max_T-fire_T - min_T)*multiple+min_gray   #100度对应的灰度值           
             # current_gray = max_gray-10   #100度对应的灰度值           
 
-            res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0)
+            res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0) #提取出火
             print(current_gray)
 
             contours,hierarchy = cv2.findContours(hotmap,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
@@ -262,8 +285,6 @@ def getImage():
                     print(str(cx)+','+str(cy))
             if cx > 0 and cy > 0:
                 detect_fire = bool(1)
-                move_left(ptz, request,0,1)
-
                 firePosition.data = [cx-320,cy-240] #将火源坐标用ROS 话题发布
             else:
                 firePosition.data = [0,0]
@@ -285,6 +306,7 @@ def firenetDetect(frame,width,height):
 ################################################################################
     global cnn_fire
     global cnnCount
+    global start_t,stop_t
     # network input sizes
     rows = 224
     cols = 224
@@ -298,12 +320,21 @@ def firenetDetect(frame,width,height):
     # label image based on prediction
     if round(output[0][0]) == 1:
         cnnCount=cnnCount+1
+        if cnnCount == 1:
+            start_t = datetime.utcnow()
         cv2.rectangle(frame, (0,0), (width,height), (0,0,255), 50)
         cv2.putText(frame,'FIRE',(int(width/16),int(height/4)),
             cv2.FONT_HERSHEY_SIMPLEX, 4,(255,255,255),10,cv2.LINE_AA);
-        if cnnCount>5:
-            cnn_fire = bool(1)
-            cnnCount = 0
+        if cnnCount>20:
+            stop_t = datetime.utcnow()
+            dt = stop_t-start_t
+            print("time: " + str(dt.seconds) + " s, " + str(dt.microseconds/1000)+ " ms")
+            if dt.seconds<1:
+                stop_move(ptz, request)    #停止移动云台
+                sleep(5)
+                cnn_fire = bool(1)
+            else:
+                cnnCount = 0
     else:
         cv2.rectangle(frame, (0,0), (width,height), (0,255,0), 50)
         cv2.putText(frame,'CLEAR',(int(width/16),int(height/4)),

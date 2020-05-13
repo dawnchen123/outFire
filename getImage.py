@@ -40,7 +40,7 @@ def move_up(ptz, request,speed, timeout=1):
     request.Velocity.PanTilt.x = 0
     request.Velocity.PanTilt.y = speed
     perform_move(ptz, request, timeout)
- 
+
 def move_down(ptz, request,speed, timeout=1):
     print('move down...') 
     request.Velocity.PanTilt.x = 0
@@ -194,8 +194,10 @@ class myThread (threading.Thread):
 
 
 if __name__ == '__main__':
-    threadLock = threading.Lock()
+    threadLock = threading.Lock() #创建线程锁
     threads = []
+
+    #创建线程
     thread1 = myThread(ptzControl,1,"Thread-1: ptzControl")
     thread2 = myThread(listener,2,"Thread-2: listener")
     thread3 = myThread(getImage,3,"Thread-3: getImage")
@@ -206,6 +208,7 @@ if __name__ == '__main__':
     thread2.start()
     thread3.start()
 
+    # 添加线程到线程列表
     threads.append(thread1)
     threads.append(thread2)
     threads.append(thread3)
