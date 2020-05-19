@@ -15,6 +15,8 @@ import os
 import math
 import rospy
 import threading
+import ctypes
+import inspect
 import time
 from datetime import datetime
 from time import sleep
@@ -44,7 +46,7 @@ global max_T,min_T
 global firePosition
 global detect_fire,cnn_fire,cnnCount
 global start_t,stop_t
-
+global thread1
 detect_fire = bool(0)
 cnn_fire = bool(0)
 firePosition = Float32MultiArray() #火源坐标初始化
@@ -107,7 +109,24 @@ def callback_position(msg):
     min_T = msg.data[0]
     max_T = msg.data[1]
 
-
+################################ Kill Thread ##############################
+def _async_raise(tid, exctype):
+    """raises the exception, performs cleanup if needed"""
+    tid = ctypes.c_long(tid)
+    if not inspect.isclass(exctype):
+        exctype = type(exctype)
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(exctype))
+    if res == 0:
+        raise ValueError("invalid thread id")
+    elif res != 1:
+        # """if it returns a number greater than one, you're in trouble,
+        # and you should call it again with exc=NULL to revert the effect"""
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
+ 
+def stop_thread(thread):
+    _async_raise(thread.ident, SystemExit)
+###########################################################################
 def construct_firenet (x,y, training=False):
 
     # Build network as per architecture in [Dunnings/Breckon, 2018]
@@ -223,6 +242,30 @@ def ptzControl():
     # stop_move(ptz, request)    #停止移动云台
 
 
+def ptzMoveToFire():
+    global detect_fire,cnn_fire
+    while True:
+        if cnn_fire:
+            print("detect CNN_fire")
+        if detect_fire and cnn_fire:
+            if firePosition.data[0] != 0:
+                if (firePosition.data[0]<-50 and firePosition.data[1]<-50): #左上
+                    move(ptz, request, -0.2,0.2,0.1) 
+                    print("LEFTTOP")
+                elif (firePosition.data[0]<-50 and firePosition.data[1]>50): #左下
+                    move(ptz, request, -0.2,-0.2,0.1) 
+                    print("LEFTDOWN")
+                elif (firePosition.data[0]>50 and firePosition.data[1]<-50): #右上
+                    move(ptz, request, 0.2,0.2,0.1) 
+                    print("RIGHTTOP")
+                elif (firePosition.data[0]>50 and firePosition.data[1]>50): #右下
+                    move(ptz, request, 0.2,-0.2,0.1) 
+                    print("RIGHTDOWN")
+                else:
+                    print("stop")
+                    stop_move(ptz, request)    #停止移动云台
+        time.sleep(0.1)
+
       
 def listener():
  
@@ -303,6 +346,7 @@ def getImage():
 ################################################################################
 
 def firenetDetect(frame,width,height):
+    global thread1
 ################################################################################
     global cnn_fire
     global cnnCount
@@ -331,7 +375,8 @@ def firenetDetect(frame,width,height):
             print("time: " + str(dt.seconds) + " s, " + str(dt.microseconds/1000)+ " ms")
             if dt.seconds<1:
                 stop_move(ptz, request)    #停止移动云台
-                sleep(5)
+                # sleep(5)
+                stop_thread(thread1)    #退出云台移动线程1
                 cnn_fire = bool(1)
             else:
                 cnnCount = 0
@@ -353,6 +398,7 @@ class myThread (threading.Thread):
         self.func = func
         self.threadID = threadID
         self.name = name
+        self._stop_event = threading.Event()
     def run(self):
         print ("开启线程： " + self.name)
         self.func()
@@ -362,21 +408,25 @@ class myThread (threading.Thread):
         threadLock.release()
 
 if __name__ == '__main__':
+    global thread1
     threadLock = threading.Lock()
     threads = []
     thread1 = myThread(ptzControl,1,"Thread-1: ptzControl")
     thread2 = myThread(listener,2,"Thread-2: listener")
     thread3 = myThread(getImage,3,"Thread-3: getImage")
+    thread4 = myThread(ptzMoveToFire,4,"Thread-4: ptzMoveToFire")
 
     
     # 开启新线程
     thread1.start()
     thread2.start()
     thread3.start()
+    thread4.start()
 
     threads.append(thread1)
     threads.append(thread2)
     threads.append(thread3)
+    threads.append(thread4)
 
 
     # # 等待所有线程完成
