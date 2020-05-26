@@ -47,6 +47,8 @@ global firePosition
 global detect_fire,cnn_fire,cnnCount
 global start_t,stop_t
 global thread1
+max_T = 0
+min_T = 0
 detect_fire = bool(0)
 cnn_fire = bool(0)
 firePosition = Float32MultiArray() #火源坐标初始化
@@ -104,10 +106,13 @@ def stop_move(ptz, request,timeout=0.05):
     perform_move(ptz, request, timeout)
 
 def callback_position(msg):
+    global detect_fire,cnn_fire
     global max_T,min_T
     # print("receive mgs:" + str(msg.data))
     min_T = msg.data[0]
     max_T = msg.data[1]
+
+
 
 ################################ Kill Thread ##############################
 def _async_raise(tid, exctype):
@@ -219,23 +224,6 @@ def ptzControl():
         if not (detect_fire or cnn_fire):
             move_right(ptz, request, 0.2,14)
             move_left(ptz, request, -0.2,14)
-        elif detect_fire and cnn_fire:
-            if firePosition.data[0] != 0:
-                if (firePosition.data[0]<-50 and firePosition.data[1]<-50): #左上
-                    move(ptz, request, -0.2,0.2,0.1) 
-                    print("LEFTTOP")
-                elif (firePosition.data[0]<-50 and firePosition.data[1]>50): #左下
-                    move(ptz, request, -0.2,-0.2,0.1) 
-                    print("LEFTDOWN")
-                elif (firePosition.data[0]>50 and firePosition.data[1]<-50): #右上
-                    move(ptz, request, 0.2,0.2,0.1) 
-                    print("RIGHTTOP")
-                elif (firePosition.data[0]>50 and firePosition.data[1]>50): #右下
-                    move(ptz, request, 0.2,-0.2,0.1) 
-                    print("RIGHTDOWN")
-                else:
-                    print("stop")
-                    stop_move(ptz, request)    #停止移动云台
         else:
             stop_move(ptz, request)    #停止移动云台
         time.sleep(0.1)
@@ -244,22 +232,23 @@ def ptzControl():
 
 def ptzMoveToFire():
     global detect_fire,cnn_fire
+    adjust_error = 30
     while True:
-        if cnn_fire:
-            print("detect CNN_fire")
+        # if cnn_fire:
+        #     print("detect CNN_fire")
         if detect_fire and cnn_fire:
             if firePosition.data[0] != 0:
-                if (firePosition.data[0]<-50 and firePosition.data[1]<-50): #左上
-                    move(ptz, request, -0.2,0.2,0.1) 
+                if ((firePosition.data[0]<-adjust_error and firePosition.data[1]<0)or(firePosition.data[0]<0 and firePosition.data[1]<-adjust_error)): #左上
+                    move(ptz, request, -0.1,0.1,0.1) 
                     print("LEFTTOP")
-                elif (firePosition.data[0]<-50 and firePosition.data[1]>50): #左下
-                    move(ptz, request, -0.2,-0.2,0.1) 
+                elif ((firePosition.data[0]<-adjust_error and firePosition.data[1]>0)or(firePosition.data[0]<0 and firePosition.data[1]>adjust_error)): #左下
+                    move(ptz, request, -0.1,-0.1,0.1) 
                     print("LEFTDOWN")
-                elif (firePosition.data[0]>50 and firePosition.data[1]<-50): #右上
-                    move(ptz, request, 0.2,0.2,0.1) 
+                elif ((firePosition.data[0]>adjust_error and firePosition.data[1]<0)or(firePosition.data[0]>0 and firePosition.data[1]<-adjust_error)): #右上
+                    move(ptz, request, 0.1,0.1,0.1) 
                     print("RIGHTTOP")
-                elif (firePosition.data[0]>50 and firePosition.data[1]>50): #右下
-                    move(ptz, request, 0.2,-0.2,0.1) 
+                elif ((firePosition.data[0]>adjust_error and firePosition.data[1]>0)or(firePosition.data[0]>0 and firePosition.data[1]>adjust_error)): #右下
+                    move(ptz, request, 0.1,-0.1,0.1) 
                     print("RIGHTDOWN")
                 else:
                     print("stop")
@@ -276,8 +265,6 @@ def listener():
 
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
-
-
 def getImage():
 
     global max_T,min_T,detect_fire,cnn_fire
@@ -285,7 +272,7 @@ def getImage():
     cx = 0
     cy = 0
     fire_T = 10         #定义与火源最高温度的差值
-    cap = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=2&subtype=1")  #hotmap
+    cap = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=2&subtype=0")  #hotmap
     video = cv2.VideoCapture("rtsp://admin:admin123@192.168.1.108/cam/realmonitor?channel=1&subtype=1")
     
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -299,20 +286,20 @@ def getImage():
         
         # print(max_T,min_T)
         ret,frame = cap.read()
-        ret2, frame2 = video.read()
 
         frame = cv2.resize(frame,(640,480))
         if not cnn_fire:
+            ret2, frame2 = video.read()
             firenetDetect(frame2,width,height)
         max_gray = frame[120,600,0]  #max gray by max temperature
         min_gray = frame[347,600,0]  #min gray by min temperature
         frame=cv2.rectangle(frame,(592,116),(610,350),(0,0,0),-1) #这里将温度指示框删除
         hotmap = frame[:,:,0]  #获取热图
         # print(max_gray,min_gray)
-        if max_T > 100:
-            multiple = (max_gray - min_gray)/(max_T - min_T)
-            current_gray = (max_T-fire_T - min_T)*multiple+min_gray   #100度对应的灰度值           
-            # current_gray = max_gray-10   #100度对应的灰度值           
+        if max_T > 80:
+            # multiple = (max_gray - min_gray)/(max_T - min_T)
+            # current_gray = (max_T-fire_T - min_T)*multiple+min_gray   #100度对应的灰度值           
+            current_gray = max_gray-10   #100度对应的灰度值           
 
             res, hotmap = cv2.threshold(hotmap,int(current_gray),255,0) #提取出火
             print(current_gray)
@@ -320,7 +307,7 @@ def getImage():
             contours,hierarchy = cv2.findContours(hotmap,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
             # cv2.drawContours(hotmap,contours,(0,255,0),3)
             for i in range(len(contours)):
-                if cv2.contourArea(contours[i])> 200:
+                if cv2.contourArea(contours[i])> 100:
                     cnt = contours[i]
                     M = cv2.moments(cnt)
                     cx = int(M['m10']/M['m00'])
@@ -334,6 +321,11 @@ def getImage():
             # pub_firePosition.publish(firePosition)
 
             cv2.imshow("fire_image",hotmap)
+        else:
+            cx = 0
+            cy = 0
+            firePosition.data = [0,0]
+            detect_fire = bool(0)
         cv2.imshow("frame",frame)
         # cv2.imshow("frame2",frame2)
         if cv2.waitKey(10) & 0xFF == ord('q'):
@@ -341,6 +333,7 @@ def getImage():
 
     cv2.destroyAllWindows()
     cap.release()
+
 
 
 ################################################################################

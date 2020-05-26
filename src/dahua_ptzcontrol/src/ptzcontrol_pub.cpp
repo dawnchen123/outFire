@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
 
 	ros::NodeHandle nh;
 	// ros::MultiThreadedSpinner s(2);
-	ros::Publisher temperature_pub = nh.advertise<std_msgs::Float32MultiArray>("temperature_data",20);//发布温度数据
+	ros::Publisher temperature_pub = nh.advertise<std_msgs::Float32MultiArray>("temperature_data",30);//发布温度数据
 
 	//订阅热红外检测话题
 	// ros::Subscriber sub_hotmap = nh.subscribe("/fire/position", 30, firePosition_Callback);
@@ -394,37 +394,12 @@ int main(int argc, char *argv[])
 	// PositionAngle=int(msg->angle[i]*10)+position_basi;	
 		
 		GetTemp(m_lLoginHandle);
+
 		temperature.data.push_back(nMin);
 		temperature.data.push_back(nMax);
 		// ros::Time::now().sec;
 		temperature_pub.publish(temperature);	
 		temperature.data.clear();
-		// if (control_x<-50 && control_y<-50) {
-		// 	PtzControl(DH_EXTPTZ_LEFTTOP,1,1,0,false); //左上
-		// 	std::cout<<"LEFTTOP"<<std::endl;
-		// } 
-		// else if (control_x<-50 && control_y>50) {
-		// 	PtzControl(DH_EXTPTZ_LEFTDOWN,1,1,0,false);	//左下
-		// 	std::cout<<"LEFTDOWN"<<std::endl;
-		// }
-		// else if (control_x>50 && control_y<-50) {
-		// 	PtzControl(DH_EXTPTZ_RIGHTTOP,1,1,0,false);	//右上
-		// 	std::cout<<"RIGHTTOP"<<std::endl;
-		// }
-		// else if (control_x>50 && control_y>50) {
-		// 	PtzControl(DH_EXTPTZ_RIGHTDOWN,1,1,0,false); //右下
-		// 	std::cout<<"RIGHTDOWN"<<std::endl;
-		// } else {
-		// 	PtzControl(DH_EXTPTZ_DELETEMODE,0,0,0,true); //停止
-		// }
-
-		// control_x = 0;
-		// control_y = 0;
-		// std::cout<<"cx: "<<control_x<<", cy: "<<control_y<<std::endl;
-		// PtzControl(DH_EXTPTZ_STOPPANCRUISE,0,0,0,false); //停止
-
-
-
 
 		ros::spinOnce();
 		loop_rate.sleep();
